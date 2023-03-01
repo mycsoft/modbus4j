@@ -5,6 +5,7 @@ import java.nio.charset.Charset;
 import com.serotonin.modbus4j.code.DataType;
 import com.serotonin.modbus4j.code.RegisterRange;
 import com.serotonin.modbus4j.exception.IllegalDataTypeException;
+import com.serotonin.modbus4j.util.DataParser;
 
 /**
  * <p>StringLocator class.</p>
@@ -83,27 +84,7 @@ public class StringLocator extends BaseLocator<String> {
     /** {@inheritDoc} */
     @Override
     public String bytesToValueRealOffset(byte[] data, int offset) {
-        offset *= 2;
-        int length = registerCount * 2;
-
-        if (dataType == DataType.CHAR)
-            return new String(data, offset, length, charset);
-
-        if (dataType == DataType.VARCHAR) {
-            int nullPos = -1;
-            for (int i = offset; i < offset + length; i++) {
-                if (data[i] == 0) {
-                    nullPos = i;
-                    break;
-                }
-            }
-
-            if (nullPos == -1)
-                return new String(data, offset, length, charset);
-            return new String(data, offset, nullPos, charset);
-        }
-
-        throw new RuntimeException("Unsupported data type: " + dataType);
+        return DataParser.bytesToString(data, offset, registerCount, dataType, charset);
     }
 
     /** {@inheritDoc} */
