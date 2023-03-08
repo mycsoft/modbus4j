@@ -42,14 +42,18 @@ import com.serotonin.modbus4j.ip.xa.XaRequestHandler;
 import com.serotonin.modbus4j.sero.messaging.MessageControl;
 import com.serotonin.modbus4j.sero.messaging.TestableTransport;
 import static java.util.Optional.ofNullable;
+import java.util.function.Consumer;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * <p>
  * TcpSlave class.</p>
  *
- * @author Matthew Lohbihler
- * @version 5.0.0
+ * @author Matthew Lohbihler , MaYichao
+ * @version 5.0.1
  */
+@Slf4j
 public class TcpSlave extends ModbusSlaveSet {
 
     // Configuration fields
@@ -166,6 +170,7 @@ public class TcpSlave extends ModbusSlaveSet {
         try {
             executorService.awaitTermination(3, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             getExceptionHandler().receivedException(e);
         }
     }
@@ -175,6 +180,21 @@ public class TcpSlave extends ModbusSlaveSet {
         private final Socket socket;
         private TestableTransport transport;
         private MessageControl conn;
+
+        /**
+         * 连接关闭前处理。
+         *
+         * @since 3.1.2
+         */
+        @Setter
+        private Consumer<MessageControl> beforeClose;
+        /**
+         * 连接关闭后。
+         *
+         * @since 3.1.2
+         */
+        @Setter
+        private Consumer<TcpConnectionHandler> afterClose;
 
         TcpConnectionHandler(Socket socket) throws ModbusInitException {
             this.socket = socket;
@@ -209,24 +229,29 @@ public class TcpSlave extends ModbusSlaveSet {
             }
 
             // Monitor the socket to detect when it gets closed.
-            while (true) {
-                try {
-                    transport.testInputStream();
-                } catch (IOException e) {
-                    break;
+            try {
+                do {
+                    try {
+                        transport.testInputStream();
+                    } catch (IOException e) {
+                        //测试连接失败。
+                        log.warn("连接{}测试失败，本连接将要中断。", socket.getInetAddress().getHostAddress());
+                        break;
+                    }
+                    try {
+                        TimeUnit.MILLISECONDS.sleep(500);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        // no op
+                    }
+                } while (true);
+            } finally {
+                ofNullable(beforeClose).ifPresent(c -> c.accept(conn));
+                conn.close();
+                kill();
+                synchronized (listConnections) {
+                    listConnections.remove(this);
                 }
-
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException e) {
-                    // no op
-                }
-            }
-
-            conn.close();
-            kill();
-            synchronized (listConnections) {
-                listConnections.remove(this);
             }
         }
 
@@ -236,6 +261,7 @@ public class TcpSlave extends ModbusSlaveSet {
             } catch (IOException e) {
                 getExceptionHandler().receivedException(new ModbusInitException(e));
             }
+            ofNullable(afterClose).ifPresent(c -> c.accept(this));
         }
     }
 }
