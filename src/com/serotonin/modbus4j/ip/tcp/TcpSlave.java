@@ -59,8 +59,8 @@ import lombok.extern.slf4j.Slf4j;
 public class TcpSlave extends ModbusSlaveSet {
 
     // Configuration fields
-    private final int port;
-    final boolean encapsulated;
+    protected final int port;
+    protected final boolean encapsulated;
 
     // Runtime fields.
     private ServerSocket serverSocket;
