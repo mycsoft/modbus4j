@@ -42,6 +42,7 @@ import com.serotonin.modbus4j.ip.xa.XaRequestHandler;
 import com.serotonin.modbus4j.sero.messaging.MessageControl;
 import com.serotonin.modbus4j.sero.messaging.TestableTransport;
 import static java.util.Optional.ofNullable;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import lombok.Getter;
@@ -213,6 +214,11 @@ public class TcpSlave extends ModbusSlaveSet {
         @Setter
         private Consumer<TcpConnectionHandler> afterClose;
 
+        /**
+         * 运行中标记位。
+         */
+        private final AtomicBoolean running = new AtomicBoolean(true);
+
         TcpConnectionHandler(Socket socket) throws ModbusInitException {
             this.socket = socket;
             try {
@@ -265,16 +271,20 @@ public class TcpSlave extends ModbusSlaveSet {
                         transport.testInputStream();
                     } catch (IOException e) {
                         //测试连接失败。
-                        log.warn("连接{}测试失败，本连接将要中断。", socket.getInetAddress().getHostAddress());
+                        if (!socket.isClosed()) {
+                            log.warn("连接{}测试失败，本连接将要中断。", socket.getInetAddress().getHostAddress());
+                        }
                         break;
                     }
-                    try {
-                        TimeUnit.MILLISECONDS.sleep(500);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        // no op
+                    if (running.get()) {
+                        try {
+                            TimeUnit.MILLISECONDS.sleep(500);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            // no op
+                        }
                     }
-                } while (true);
+                } while (running.get());
             } finally {
                 ofNullable(beforeClose).ifPresent(c -> c.accept(conn));
                 conn.close();
@@ -286,12 +296,20 @@ public class TcpSlave extends ModbusSlaveSet {
         }
 
         public void kill() {
-            try {
-                socket.close();
-            } catch (IOException e) {
-                getExceptionHandler().receivedException(new ModbusInitException(e));
+            if (running.get()) {
+                running.set(false);
+                if (!socket.isClosed()) {
+                    String ip = socket.getInetAddress().getHostAddress();
+                    log.info("开始关闭与{}连接的通道", ip);
+                    try {
+                        socket.close();
+                        log.info("与{}连接的通道关闭完成。", ip);
+                    } catch (IOException e) {
+                        getExceptionHandler().receivedException(new ModbusInitException(e));
+                    }
+                }
+                ofNullable(afterClose).ifPresent(c -> c.accept(this));
             }
-            ofNullable(afterClose).ifPresent(c -> c.accept(this));
         }
     }
 }
