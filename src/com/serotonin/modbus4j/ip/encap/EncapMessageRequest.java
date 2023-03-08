@@ -28,12 +28,14 @@ import com.serotonin.modbus4j.sero.messaging.OutgoingRequestMessage;
 import com.serotonin.modbus4j.sero.util.queue.ByteQueue;
 
 /**
- * <p>EncapMessageRequest class.</p>
+ * <p>
+ * EncapMessageRequest class.</p>
  *
  * @author Matthew Lohbihler
  * @version 5.0.0
  */
 public class EncapMessageRequest extends EncapMessage implements OutgoingRequestMessage, IncomingRequestMessage {
+
     static EncapMessageRequest createEncapMessageRequest(ByteQueue queue) throws ModbusTransportException {
         // Create the modbus response.
         ModbusRequest request = ModbusRequest.createModbusRequest(queue);
@@ -46,22 +48,27 @@ public class EncapMessageRequest extends EncapMessage implements OutgoingRequest
     }
 
     /**
-     * <p>Constructor for EncapMessageRequest.</p>
+     * <p>
+     * Constructor for EncapMessageRequest.</p>
      *
-     * @param modbusRequest a {@link com.serotonin.modbus4j.msg.ModbusRequest} object.
+     * @param modbusRequest a {@link com.serotonin.modbus4j.msg.ModbusRequest}
+     * object.
      */
     public EncapMessageRequest(ModbusRequest modbusRequest) {
         super(modbusRequest);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean expectsResponse() {
         return modbusMessage.getSlaveId() != 0;
     }
 
     /**
-     * <p>getModbusRequest.</p>
+     * <p>
+     * getModbusRequest.</p>
      *
      * @return a {@link com.serotonin.modbus4j.msg.ModbusRequest} object.
      */

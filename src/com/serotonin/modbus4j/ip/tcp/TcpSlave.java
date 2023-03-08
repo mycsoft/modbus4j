@@ -43,6 +43,8 @@ import com.serotonin.modbus4j.sero.messaging.MessageControl;
 import com.serotonin.modbus4j.sero.messaging.TestableTransport;
 import static java.util.Optional.ofNullable;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -178,8 +180,23 @@ public class TcpSlave extends ModbusSlaveSet {
     public class TcpConnectionHandler implements Runnable {
 
         private final Socket socket;
+        @Getter
         private TestableTransport transport;
         private MessageControl conn;
+        /**
+         * 消息解析器创建器。
+         *
+         * @since 3.1.2
+         */
+        @Setter
+        private Function<Boolean, BaseMessageParser> messageParserCreater;
+        /**
+         * 消息处理器创建器。
+         *
+         * @since 3.1.2
+         */
+        @Setter
+        private Function<Boolean, BaseRequestHandler> messageHandlerCreater;
 
         /**
          * 连接关闭前处理。
@@ -205,17 +222,30 @@ public class TcpSlave extends ModbusSlaveSet {
             }
         }
 
+        /**
+         * 执行。
+         *
+         * @since 3.1.2
+         */
         @Override
         public void run() {
             BaseMessageParser messageParser;
             BaseRequestHandler requestHandler;
 
             if (encapsulated) {
-                messageParser = new EncapMessageParser(false);
-                requestHandler = new EncapRequestHandler(TcpSlave.this);
+                messageParser = ofNullable(messageParserCreater)
+                        .map(f -> f.apply(encapsulated))
+                        .orElseGet(() -> new EncapMessageParser(false));
+                requestHandler = ofNullable(messageHandlerCreater)
+                        .map(f -> f.apply(encapsulated))
+                        .orElseGet(() -> new EncapRequestHandler(TcpSlave.this));
             } else {
-                messageParser = new XaMessageParser(false);
-                requestHandler = new XaRequestHandler(TcpSlave.this);
+                messageParser = ofNullable(messageParserCreater)
+                        .map(f -> f.apply(encapsulated))
+                        .orElseGet(() -> new XaMessageParser(false));
+                requestHandler = ofNullable(messageHandlerCreater)
+                        .map(f -> f.apply(encapsulated))
+                        .orElseGet(() -> new XaRequestHandler(TcpSlave.this));
             }
 
             conn = new MessageControl();
