@@ -28,17 +28,20 @@ import com.serotonin.modbus4j.exception.ModbusTransportException;
 import com.serotonin.modbus4j.sero.util.queue.ByteQueue;
 
 /**
- * <p>WriteRegistersRequest class.</p>
+ * <p>
+ * WriteRegistersRequest class.</p>
  *
  * @author Matthew Lohbihler
  * @version 5.0.0
  */
 public class WriteRegistersRequest extends ModbusRequest {
+
     private int startOffset;
     private byte[] data;
 
     /**
-     * <p>Constructor for WriteRegistersRequest.</p>
+     * <p>
+     * Constructor for WriteRegistersRequest.</p>
      *
      * @param slaveId a int.
      * @param startOffset a int.
@@ -51,21 +54,26 @@ public class WriteRegistersRequest extends ModbusRequest {
         data = convertToBytes(sdata);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void validate(Modbus modbus) throws ModbusTransportException {
         ModbusUtils.validateOffset(startOffset);
         int registerCount = data.length / 2;
-        if (registerCount < 1 || registerCount > modbus.getMaxWriteRegisterCount())
+        if (registerCount < 1 || registerCount > modbus.getMaxWriteRegisterCount()) {
             throw new ModbusTransportException("Invalid number of registers: " + registerCount, slaveId);
-        ModbusUtils.validateEndOffset(startOffset + registerCount -1);
+        }
+        ModbusUtils.validateEndOffset(startOffset + registerCount - 1);
     }
 
     WriteRegistersRequest(int slaveId) throws ModbusTransportException {
         super(slaveId);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     protected void writeRequest(ByteQueue queue) {
         ModbusUtils.pushShort(queue, startOffset);
@@ -77,12 +85,15 @@ public class WriteRegistersRequest extends ModbusRequest {
     @Override
     ModbusResponse handleImpl(ProcessImage processImage) throws ModbusTransportException {
         short[] sdata = convertToShorts(data);
-        for (int i = 0; i < sdata.length; i++)
+        for (int i = 0; i < sdata.length; i++) {
             processImage.writeHoldingRegister(startOffset + i, sdata[i]);
+        }
         return new WriteRegistersResponse(slaveId, startOffset, sdata.length);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public byte getFunctionCode() {
         return FunctionCode.WRITE_REGISTERS;
@@ -93,7 +104,9 @@ public class WriteRegistersRequest extends ModbusRequest {
         return new WriteRegistersResponse(slaveId);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     protected void readRequest(ByteQueue queue) {
         startOffset = ModbusUtils.popUnsignedShort(queue);

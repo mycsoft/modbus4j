@@ -31,16 +31,20 @@ import com.serotonin.modbus4j.exception.ModbusTransportException;
 import com.serotonin.modbus4j.sero.util.queue.ByteQueue;
 
 /**
- * <p>Abstract ModbusRequest class.</p>
+ * <p>
+ * Abstract ModbusRequest class.</p>
  *
  * @author Matthew Lohbihler
  * @version 5.0.0
  */
 abstract public class ModbusRequest extends ModbusMessage {
+
     /**
-     * <p>createModbusRequest.</p>
+     * <p>
+     * createModbusRequest.</p>
      *
-     * @param queue a {@link com.serotonin.modbus4j.sero.util.queue.ByteQueue} object.
+     * @param queue a {@link com.serotonin.modbus4j.sero.util.queue.ByteQueue}
+     * object.
      * @return a {@link com.serotonin.modbus4j.msg.ModbusRequest} object.
      * @throws com.serotonin.modbus4j.exception.ModbusTransportException if any.
      */
@@ -49,42 +53,44 @@ abstract public class ModbusRequest extends ModbusMessage {
         byte functionCode = queue.pop();
 
         ModbusRequest request = null;
-        if (functionCode == FunctionCode.READ_COILS)
+        if (functionCode == FunctionCode.READ_COILS) {
             request = new ReadCoilsRequest(slaveId);
-        else if (functionCode == FunctionCode.READ_DISCRETE_INPUTS)
+        } else if (functionCode == FunctionCode.READ_DISCRETE_INPUTS) {
             request = new ReadDiscreteInputsRequest(slaveId);
-        else if (functionCode == FunctionCode.READ_HOLDING_REGISTERS)
+        } else if (functionCode == FunctionCode.READ_HOLDING_REGISTERS) {
             request = new ReadHoldingRegistersRequest(slaveId);
-        else if (functionCode == FunctionCode.READ_INPUT_REGISTERS)
+        } else if (functionCode == FunctionCode.READ_INPUT_REGISTERS) {
             request = new ReadInputRegistersRequest(slaveId);
-        else if (functionCode == FunctionCode.WRITE_COIL)
+        } else if (functionCode == FunctionCode.WRITE_COIL) {
             request = new WriteCoilRequest(slaveId);
-        else if (functionCode == FunctionCode.WRITE_REGISTER)
+        } else if (functionCode == FunctionCode.WRITE_REGISTER) {
             request = new WriteRegisterRequest(slaveId);
-        else if (functionCode == FunctionCode.READ_EXCEPTION_STATUS)
+        } else if (functionCode == FunctionCode.READ_EXCEPTION_STATUS) {
             request = new ReadExceptionStatusRequest(slaveId);
-        else if (functionCode == FunctionCode.WRITE_COILS)
+        } else if (functionCode == FunctionCode.WRITE_COILS) {
             request = new WriteCoilsRequest(slaveId);
-        else if (functionCode == FunctionCode.WRITE_REGISTERS)
+        } else if (functionCode == FunctionCode.WRITE_REGISTERS) {
             request = new WriteRegistersRequest(slaveId);
-        else if (functionCode == FunctionCode.REPORT_SLAVE_ID)
+        } else if (functionCode == FunctionCode.REPORT_SLAVE_ID) {
             request = new ReportSlaveIdRequest(slaveId);
-        // else if (functionCode == FunctionCode.WRITE_MASK_REGISTER)
+        } // else if (functionCode == FunctionCode.WRITE_MASK_REGISTER)
         // request = new WriteMaskRegisterRequest(slaveId);
-        else
+        else {
             request = new ExceptionRequest(slaveId, functionCode, ExceptionCode.ILLEGAL_FUNCTION);
+        }
 
         request.readRequest(queue);
 
         return request;
     }
 
-    ModbusRequest(int slaveId) throws ModbusTransportException {
+    protected ModbusRequest(int slaveId) throws ModbusTransportException {
         super(slaveId);
     }
 
     /**
-     * <p>validate.</p>
+     * <p>
+     * validate.</p>
      *
      * @param modbus a {@link com.serotonin.modbus4j.Modbus} object.
      * @throws com.serotonin.modbus4j.exception.ModbusTransportException if any.
@@ -92,7 +98,8 @@ abstract public class ModbusRequest extends ModbusMessage {
     abstract public void validate(Modbus modbus) throws ModbusTransportException;
 
     /**
-     * <p>handle.</p>
+     * <p>
+     * handle.</p>
      *
      * @param processImage a {@link com.serotonin.modbus4j.ProcessImage} object.
      * @return a {@link com.serotonin.modbus4j.msg.ModbusResponse} object.
@@ -102,12 +109,10 @@ abstract public class ModbusRequest extends ModbusMessage {
         try {
             try {
                 return handleImpl(processImage);
-            }
-            catch (IllegalDataAddressException e) {
+            } catch (IllegalDataAddressException e) {
                 return handleException(ExceptionCode.ILLEGAL_DATA_ADDRESS);
             }
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             return handleException(ExceptionCode.SLAVE_DEVICE_FAILURE);
         }
     }
@@ -115,9 +120,11 @@ abstract public class ModbusRequest extends ModbusMessage {
     abstract ModbusResponse handleImpl(ProcessImage processImage) throws ModbusTransportException;
 
     /**
-     * <p>readRequest.</p>
+     * <p>
+     * readRequest.</p>
      *
-     * @param queue a {@link com.serotonin.modbus4j.sero.util.queue.ByteQueue} object.
+     * @param queue a {@link com.serotonin.modbus4j.sero.util.queue.ByteQueue}
+     * object.
      */
     abstract protected void readRequest(ByteQueue queue);
 
@@ -129,7 +136,9 @@ abstract public class ModbusRequest extends ModbusMessage {
 
     abstract ModbusResponse getResponseInstance(int slaveId) throws ModbusTransportException;
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     final protected void writeImpl(ByteQueue queue) {
         queue.push(getFunctionCode());
@@ -137,9 +146,11 @@ abstract public class ModbusRequest extends ModbusMessage {
     }
 
     /**
-     * <p>writeRequest.</p>
+     * <p>
+     * writeRequest.</p>
      *
-     * @param queue a {@link com.serotonin.modbus4j.sero.util.queue.ByteQueue} object.
+     * @param queue a {@link com.serotonin.modbus4j.sero.util.queue.ByteQueue}
+     * object.
      */
     abstract protected void writeRequest(ByteQueue queue);
 }

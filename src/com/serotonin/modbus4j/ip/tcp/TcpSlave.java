@@ -41,17 +41,27 @@ import com.serotonin.modbus4j.ip.xa.XaMessageParser;
 import com.serotonin.modbus4j.ip.xa.XaRequestHandler;
 import com.serotonin.modbus4j.sero.messaging.MessageControl;
 import com.serotonin.modbus4j.sero.messaging.TestableTransport;
+import static java.util.Optional.ofNullable;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 
 /**
- * <p>TcpSlave class.</p>
+ * <p>
+ * TcpSlave class.</p>
  *
- * @author Matthew Lohbihler
- * @version 5.0.0
+ * @author Matthew Lohbihler , MaYichao
+ * @version 5.0.1
  */
+@Slf4j
 public class TcpSlave extends ModbusSlaveSet {
+
     // Configuration fields
-    private final int port;
-    final boolean encapsulated;
+    protected final int port;
+    protected final boolean encapsulated;
 
     // Runtime fields.
     private ServerSocket serverSocket;
@@ -59,7 +69,8 @@ public class TcpSlave extends ModbusSlaveSet {
     final List<TcpConnectionHandler> listConnections = new ArrayList<>();
 
     /**
-     * <p>Constructor for TcpSlave.</p>
+     * <p>
+     * Constructor for TcpSlave.</p>
      *
      * @param encapsulated a boolean.
      */
@@ -68,7 +79,8 @@ public class TcpSlave extends ModbusSlaveSet {
     }
 
     /**
-     * <p>Constructor for TcpSlave.</p>
+     * <p>
+     * Constructor for TcpSlave.</p>
      *
      * @param port a int.
      * @param encapsulated a boolean.
@@ -79,7 +91,11 @@ public class TcpSlave extends ModbusSlaveSet {
         executorService = Executors.newCachedThreadPool();
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * @since 3.1.2
+     */
     @Override
     public void start() throws ModbusInitException {
         try {
@@ -88,33 +104,67 @@ public class TcpSlave extends ModbusSlaveSet {
             Socket socket;
             while (true) {
                 socket = serverSocket.accept();
-                TcpConnectionHandler handler = new TcpConnectionHandler(socket);
-                executorService.execute(handler);
-                synchronized (listConnections) {
-                    listConnections.add(handler);
-                }
+                onAcceptSocket(socket);
             }
-        }
-        catch (IOException e) {
+        } catch (IOException e) {
             throw new ModbusInitException(e);
         }
     }
 
-    /** {@inheritDoc} */
+    /**
+     * 当接收到新的socket请求时。
+     *
+     * @param socket
+     * @throws ModbusInitException
+     * @since 3.1.2
+     */
+    protected void onAcceptSocket(Socket socket) throws ModbusInitException {
+        //如果hander不为空，则执行这个通道。
+        ofNullable(createConnectionHandler(socket)).ifPresent(this::executeConnection);
+    }
+
+    /**
+     * 根据socket创建新Hanler.
+     *
+     * @param socket
+     * @return 如果当前连接不被允许，则返回null.
+     * @throws ModbusInitException
+     * @since 3.1.2
+     */
+    protected TcpConnectionHandler createConnectionHandler(Socket socket) throws ModbusInitException {
+        return new TcpConnectionHandler(socket);
+    }
+
+    /**
+     * 执行一个连接。
+     *
+     * @param handler
+     * @since 3.1.2
+     */
+    protected void executeConnection(TcpConnectionHandler handler) {
+        executorService.execute(handler);
+        synchronized (listConnections) {
+            listConnections.add(handler);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void stop() {
         // Close the socket first to prevent new messages.
         try {
             serverSocket.close();
-        }
-        catch (IOException e) {
+        } catch (IOException e) {
             getExceptionHandler().receivedException(e);
         }
 
         // Close all open connections.
         synchronized (listConnections) {
-            for (TcpConnectionHandler tch : listConnections)
+            for (TcpConnectionHandler tch : listConnections) {
                 tch.kill();
+            }
             listConnections.clear();
         }
 
@@ -122,39 +172,86 @@ public class TcpSlave extends ModbusSlaveSet {
         executorService.shutdown();
         try {
             executorService.awaitTermination(3, TimeUnit.SECONDS);
-        }
-        catch (InterruptedException e) {
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             getExceptionHandler().receivedException(e);
         }
     }
 
-    class TcpConnectionHandler implements Runnable {
+    public class TcpConnectionHandler implements Runnable {
+
         private final Socket socket;
+        @Getter
         private TestableTransport transport;
         private MessageControl conn;
+        /**
+         * 消息解析器创建器。
+         *
+         * @since 3.1.2
+         */
+        @Setter
+        private Function<Boolean, BaseMessageParser> messageParserCreater;
+        /**
+         * 消息处理器创建器。
+         *
+         * @since 3.1.2
+         */
+        @Setter
+        private Function<Boolean, BaseRequestHandler> messageHandlerCreater;
+
+        /**
+         * 连接关闭前处理。
+         *
+         * @since 3.1.2
+         */
+        @Setter
+        private Consumer<MessageControl> beforeClose;
+        /**
+         * 连接关闭后。
+         *
+         * @since 3.1.2
+         */
+        @Setter
+        private Consumer<TcpConnectionHandler> afterClose;
+
+        /**
+         * 运行中标记位。
+         */
+        private final AtomicBoolean running = new AtomicBoolean(true);
 
         TcpConnectionHandler(Socket socket) throws ModbusInitException {
             this.socket = socket;
             try {
                 transport = new TestableTransport(socket.getInputStream(), socket.getOutputStream());
-            }
-            catch (IOException e) {
+            } catch (IOException e) {
                 throw new ModbusInitException(e);
             }
         }
 
+        /**
+         * 执行。
+         *
+         * @since 3.1.2
+         */
         @Override
         public void run() {
             BaseMessageParser messageParser;
             BaseRequestHandler requestHandler;
 
             if (encapsulated) {
-                messageParser = new EncapMessageParser(false);
-                requestHandler = new EncapRequestHandler(TcpSlave.this);
-            }
-            else {
-                messageParser = new XaMessageParser(false);
-                requestHandler = new XaRequestHandler(TcpSlave.this);
+                messageParser = ofNullable(messageParserCreater)
+                        .map(f -> f.apply(encapsulated))
+                        .orElseGet(() -> new EncapMessageParser(false));
+                requestHandler = ofNullable(messageHandlerCreater)
+                        .map(f -> f.apply(encapsulated))
+                        .orElseGet(() -> new EncapRequestHandler(TcpSlave.this));
+            } else {
+                messageParser = ofNullable(messageParserCreater)
+                        .map(f -> f.apply(encapsulated))
+                        .orElseGet(() -> new XaMessageParser(false));
+                requestHandler = ofNullable(messageHandlerCreater)
+                        .map(f -> f.apply(encapsulated))
+                        .orElseGet(() -> new XaRequestHandler(TcpSlave.this));
             }
 
             conn = new MessageControl();
@@ -163,41 +260,55 @@ public class TcpSlave extends ModbusSlaveSet {
             try {
                 conn.start(transport, messageParser, requestHandler, null);
                 executorService.execute(transport);
-            }
-            catch (IOException e) {
+            } catch (IOException e) {
                 getExceptionHandler().receivedException(new ModbusInitException(e));
             }
 
             // Monitor the socket to detect when it gets closed.
-            while (true) {
-                try {
-                    transport.testInputStream();
+            try {
+                do {
+                    try {
+                        transport.testInputStream();
+                    } catch (IOException e) {
+                        //测试连接失败。
+                        if (!socket.isClosed()) {
+                            log.warn("连接{}测试失败，本连接将要中断。", socket.getInetAddress().getHostAddress());
+                        }
+                        break;
+                    }
+                    if (running.get()) {
+                        try {
+                            TimeUnit.MILLISECONDS.sleep(500);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            // no op
+                        }
+                    }
+                } while (running.get());
+            } finally {
+                ofNullable(beforeClose).ifPresent(c -> c.accept(conn));
+                conn.close();
+                kill();
+                synchronized (listConnections) {
+                    listConnections.remove(this);
                 }
-                catch (IOException e) {
-                    break;
-                }
-
-                try {
-                    Thread.sleep(500);
-                }
-                catch (InterruptedException e) {
-                    // no op
-                }
-            }
-
-            conn.close();
-            kill();
-            synchronized (listConnections) {
-                listConnections.remove(this);
             }
         }
 
-        void kill() {
-            try {
-                socket.close();
-            }
-            catch (IOException e) {
-                getExceptionHandler().receivedException(new ModbusInitException(e));
+        public void kill() {
+            if (running.get()) {
+                running.set(false);
+                if (!socket.isClosed()) {
+                    String ip = socket.getInetAddress().getHostAddress();
+                    log.info("开始关闭与{}连接的通道", ip);
+                    try {
+                        socket.close();
+                        log.info("与{}连接的通道关闭完成。", ip);
+                    } catch (IOException e) {
+                        getExceptionHandler().receivedException(new ModbusInitException(e));
+                    }
+                }
+                ofNullable(afterClose).ifPresent(c -> c.accept(this));
             }
         }
     }
